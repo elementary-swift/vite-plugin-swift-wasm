@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0",
+  "swiftCompiler": {
+    "extraCLIOptions": [
+      "-Xclang-linker",
+      "-mexec-model=reactor",
+      "-Xlinker",
+      "--export-if-defined=__main_argc_argv"
+    ]
+  }
+}
