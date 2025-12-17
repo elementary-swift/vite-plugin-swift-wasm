@@ -29,4 +29,4 @@ jobs:
       - run: pnpm install
       - run: pnpm typecheck & pnpm format:check
       - run: pnpm build
-      - run: pnpm publish --no-git-checks
+      - run: npm publish

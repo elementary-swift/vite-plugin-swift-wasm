@@ -72,3 +72,10 @@ swiftWasm({
   wasmOptArgs: ["-Os", "--strip-debug"],
 });
 ```
+
+## Publishing
+
+```sh
+pnpm version [patch | minor | major]
+git push --follow-tags
+```
