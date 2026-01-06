@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { type Plugin, createLogger } from "vite";
 import colors from "picocolors";
 
@@ -58,7 +59,9 @@ export default function swiftWasm(options?: SwiftWasmPluginOptions): Plugin {
   const RESOLVED_PREFIX = "\0" + VIRTUAL_PREFIX;
   const reactorToolsetArgs = [
     "--toolset",
-    new URL("../utils/wasm-reactor-toolset.json", import.meta.url).pathname,
+    fileURLToPath(
+      new URL("../utils/wasm-reactor-toolset.json", import.meta.url),
+    ),
   ];
 
   // NOTE: this could theoretically be several, but not for now
@@ -138,7 +141,9 @@ export default function swiftWasm(options?: SwiftWasmPluginOptions): Plugin {
         logger.info(`Building ${product}...`);
         console.debug(
           colors.bold(
-            colors.gray(`$ ${swiftBin} build ${swiftBuildArgs.join(" ")}`),
+            colors.gray(
+              `$ ${swiftBin} build ${quoteArgsForDisplay(swiftBuildArgs)}`,
+            ),
           ),
         );
 
@@ -289,7 +294,9 @@ async function optimizeWasm(
   logger.info(`Optimizing ${wasmPath}...`);
 
   const args = [wasmPath, "-o", wasmPath, ...wasmOptArgs];
-  console.debug(colors.bold(colors.gray(`$ ${wasmOptBin} ${args.join(" ")}`)));
+  console.debug(
+    colors.bold(colors.gray(`$ ${wasmOptBin} ${quoteArgsForDisplay(args)}`)),
+  );
   await runCommand(wasmOptBin, args);
 }
 
@@ -324,6 +331,10 @@ async function getSingleExecutableTarget(
 
 async function getBuildOutputPath(args: string[]): Promise<string> {
   return await execCommand(swiftBin, ["build", "--show-bin-path", ...args]);
+}
+
+function quoteArgsForDisplay(args: string[]): string {
+  return args.map((arg) => (arg.includes(" ") ? `"${arg}"` : arg)).join(" ");
 }
 
 async function runCommand(
@@ -361,7 +372,11 @@ async function runCommand(
     child.on("close", (code: number | null) => {
       if (code === 0) resolve(capture ? stdout.trim() : undefined);
       else
-        reject(new Error(`Command failed (${code}): ${cmd} ${args.join(" ")}`));
+        reject(
+          new Error(
+            `Command failed (${code}): ${cmd} ${quoteArgsForDisplay(args)}`,
+          ),
+        );
     });
   });
 }
