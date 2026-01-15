@@ -1,6 +1,6 @@
 {
   "name": "@elementary-swift/vite-plugin-swift-wasm",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A Vite plugin for Swift WebAssembly integration",
   "repository": {
     "type": "git",
