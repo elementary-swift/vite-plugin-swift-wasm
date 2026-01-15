@@ -9,7 +9,8 @@ A Vite plugin for Swift WebAssembly integration.
 - automatically detects matching Swift SDK for WebAssembly and builds a reactor module
 - watches changes of \*.swift files and triggers instant rebuild and reload
 - for release builds: optimizes binary using wasm-opt (must be installed separately)
-- supports Embedded Swift build mode (via `wasm-embedded` Swift SDK)
+- supports [Embedded Swift](https://docs.swift.org/embedded/documentation/embedded/) build mode (via `wasm-embedded` Swift SDK)
+- automatically links [swiftUnicodeDataTables](https://docs.swift.org/embedded/documentation/embedded/strings/) when using Embedded Swift
 
 ## Installation
 
@@ -20,10 +21,10 @@ pnpm i -D @elementary-swift/vite-plugin-swift-wasm
 # npm i -D @elementary-swift/vite-plugin-swift-wasm
 
 
-# Typescript: Add @elementary-swift/vite-plugin-swift-wasm/client to types configuration
+# TypeScript: Add @elementary-swift/vite-plugin-swift-wasm/client to types configuration
 ```
 
-Requires Swift 6.2 or newer from [swift.org](https://www.swift.org/install) and a matching [Swift SDK for WebAssebmly](https://www.swift.org/documentation/articles/wasm-getting-started.html).
+Requires Swift 6.2 or newer from [swift.org](https://www.swift.org/install) and a matching [Swift SDK for WebAssembly](https://www.swift.org/documentation/articles/wasm-getting-started.html).
 
 ## Usage
 
@@ -64,6 +65,10 @@ swiftWasm({
   // Use Embedded Swift variant (production builds only)
   // Produces smaller binaries with reduced runtime overhead
   useEmbeddedSDK: false,
+
+  // Link Swift Unicode data tables when building with Embedded Swift
+  // Only relevant when useEmbeddedSDK is true
+  linkEmbeddedUnicodeDataTables: true,
 
   // Optimize WebAssembly module with wasm-opt (production builds only)
   useWasmOpt: true,
