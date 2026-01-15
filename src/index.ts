@@ -35,6 +35,17 @@ type SwiftWasmPluginOptions = {
   useEmbeddedSDK?: boolean;
 
   /**
+   * Whether to link the Unicode data tables when building with Embedded Swift.
+   *
+   * This is only relevant when useEmbeddedSDK is true.
+   * By explicitly setting this to false, you can disable the automatic linking of the Unicode data tables.
+   * See https://docs.swift.org/embedded/documentation/embedded/strings/ for more details.
+   *
+   * @default true
+   */
+  linkEmbeddedUnicodeDataTables?: boolean;
+
+  /**
    * Whether to optimize the generated WebAssembly module using wasm-opt (in production builds only).
    * When enabled, applies size and performance optimizations to the final .wasm file.
    * @default true
@@ -51,18 +62,14 @@ type SwiftWasmPluginOptions = {
 export default function swiftWasm(options?: SwiftWasmPluginOptions): Plugin {
   let useWasmOpt = options?.useWasmOpt ?? true;
   let useEmbeddedSwift = options?.useEmbeddedSDK ?? false;
+  let linkEmbeddedUnicodeDataTables =
+    options?.linkEmbeddedUnicodeDataTables ?? true;
   const wasmOptArgs = options?.wasmOptArgs ?? DEFAULT_WASM_OPT_ARGS;
   const packagePath = options?.packagePath ?? ".";
   const extraBuildArgs = options?.extraBuildArgs ?? [];
 
   const VIRTUAL_PREFIX = "virtual:swift-wasm?init";
   const RESOLVED_PREFIX = "\0" + VIRTUAL_PREFIX;
-  const reactorToolsetArgs = [
-    "--toolset",
-    fileURLToPath(
-      new URL("../utils/wasm-reactor-toolset.json", import.meta.url),
-    ),
-  ];
 
   // NOTE: this could theoretically be several, but not for now
   let wasmModule: string | undefined;
@@ -135,7 +142,13 @@ export default function swiftWasm(options?: SwiftWasmPluginOptions): Plugin {
           packagePath,
           product: product,
           configuration,
-          extraBuildArgs: [...reactorToolsetArgs, ...extraBuildArgs],
+          extraBuildArgs: [
+            ...toolsetBuildArgs(
+              useEmbeddedSwift,
+              linkEmbeddedUnicodeDataTables,
+            ),
+            ...extraBuildArgs,
+          ],
         });
 
         logger.info(`Building ${product}...`);
@@ -422,6 +435,41 @@ function createThrottledRebuilder(swiftBuildArgs: string[]) {
       }
     }
   };
+}
+
+function toolsetBuildArgs(
+  isEmbedded: boolean,
+  linkEmbeddedUnicodeDataTables: boolean,
+): string[] {
+  let args: string[] = [];
+
+  if (isEmbedded && linkEmbeddedUnicodeDataTables) {
+    args.push(
+      "--toolset",
+      toolsetPathFromPwd("../utils/embedded-unicode-toolset.json"),
+    );
+  }
+
+  args.push(
+    "--toolset",
+    toolsetPathFromPwd("../utils/wasm-reactor-toolset.json"),
+  );
+
+  return args;
+}
+
+function toolsetPathFromPwd(toolsetPathRelativeToThisModule: string): string {
+  const absPath = fileURLToPath(
+    new URL(toolsetPathRelativeToThisModule, import.meta.url),
+  );
+  let relPath = path.relative(process.cwd(), absPath);
+
+  // Make it explicit that this is a relative path (helps when printing commands)
+  if (!relPath.startsWith(".") && !path.isAbsolute(relPath)) {
+    relPath = `.${path.sep}${relPath}`;
+  }
+
+  return relPath;
 }
 
 const logger = (() => {
