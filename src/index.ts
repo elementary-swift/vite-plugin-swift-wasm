@@ -266,6 +266,8 @@ async function resolveSwiftSDKID(useEmbeddedSwift: boolean): Promise<string> {
     );
   }
 
+  warnIfXcodeToolchainDetected(compilerTag);
+
   swiftSDKID = compilerTag + "_wasm";
   if (useEmbeddedSwift) {
     swiftSDKID += "-embedded";
@@ -322,6 +324,22 @@ async function getSwiftCompilerTag(): Promise<string | undefined> {
   const output = await execCommand(swiftBin, ["-print-target-info"]);
   const targetInfo = JSON.parse(output);
   return targetInfo.swiftCompilerTag;
+}
+
+function warnIfXcodeToolchainDetected(compilerTag: string | undefined): void {
+  function isXcodeSwiftCompilerTag(tag: string): boolean {
+    return /^swiftlang-(\d+\.){4,}/.test(tag);
+  }
+
+  if (!compilerTag || !isXcodeSwiftCompilerTag(compilerTag)) {
+    return;
+  }
+
+  logger.warn(
+    colors.yellow(
+      `[!] Xcode Swift toolchain detected. Cross-compiling to WebAssembly is likely to fail with Swift version ${compilerTag}. Make sure to use a Swift.org toolchain: https://www.swift.org/install/`,
+    ),
+  );
 }
 
 async function getSingleExecutableTarget(
