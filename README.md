@@ -40,7 +40,7 @@ export default defineConfig({
 ### JavaScriptKit / BridgeJS
 
 The `?js` mode runs `swift package js` and re-exports the generated module.
-The Swift package have a dependency on [JavaScriptKit](https://github.com/swiftwasm/JavaScriptKit), which provides the `js` package command.
+The Swift package must have a dependency on [JavaScriptKit](https://github.com/swiftwasm/JavaScriptKit), which provides the `js` package command.
 
 ```ts
 // index.ts
@@ -54,7 +54,7 @@ const wasmInstance = await init();
 
 ### Manual WebAssembly initialization
 
-The `?init` mode run a plain `swift build` and re-exports Vite's
+The `?init` mode runs a plain `swift build` and re-exports Vite's
 [manual WebAssembly initialization](https://vite.dev/guide/features#webassembly) function.
 
 ```ts
@@ -65,7 +65,7 @@ const wasmInstance = myApp();
 
 const wasmInstanceWithImports = myApp({ someImport, moreImports });
 
-// product name can be omitted if only one executable target in the package
+// product name can be omitted if there is only one executable target in the package
 // import myApp from "virtual:swift-wasm?init";
 ```
 
