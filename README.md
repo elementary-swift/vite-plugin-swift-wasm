@@ -5,7 +5,8 @@ A Vite plugin for Swift WebAssembly integration.
 ## Features
 
 - add support for importing an executable target from a local SwiftPM package
-- supports raw WebAssembly (`?init`) and JavaScriptKit PackageToJS (`?js`) build modes
+- supports [JavaScriptKit](https://github.com/swiftwasm/JavaScriptKit/) and BridgeJS through the `swift package js` plugin (`?js`)
+- supports [manual WebAssembly initialization](https://vite.dev/guide/features#webassembly) with plain `swift build` (`?init`)
 - automatically detects matching Swift SDK for WebAssembly and builds a reactor module
 - watches changes of \*.swift files and triggers instant rebuild and reload
 - for release builds: optimizes binary using wasm-opt (must be installed separately)
@@ -15,11 +16,9 @@ A Vite plugin for Swift WebAssembly integration.
 ## Installation
 
 ```bash
-pnpm i -D @elementary-swift/vite-plugin-swift-wasm
-
+npm i -D @elementary-swift/vite-plugin-swift-wasm
 # or
-# npm i -D @elementary-swift/vite-plugin-swift-wasm
-
+# pnpm i -D @elementary-swift/vite-plugin-swift-wasm
 
 # TypeScript: Add @elementary-swift/vite-plugin-swift-wasm/client to types configuration
 ```
@@ -38,7 +37,25 @@ export default defineConfig({
 });
 ```
 
-### Raw WebAssembly
+### JavaScriptKit / BridgeJS
+
+The `?js` mode runs `swift package js` and re-exports the generated module.
+The Swift package have a dependency on [JavaScriptKit](https://github.com/swiftwasm/JavaScriptKit), which provides the `js` package command.
+
+```ts
+// index.ts
+import { init } from "virtual:swift-wasm?js&product=MyApp";
+
+const wasmInstance = await init();
+
+// product name can be omitted if only one executable target is in the package
+// import { init } from "virtual:swift-wasm?js";
+```
+
+### Manual WebAssembly initialization
+
+The `?init` mode run a plain `swift build` and re-exports Vite's
+[manual WebAssembly initialization](https://vite.dev/guide/features#webassembly) function.
 
 ```ts
 // index.ts
@@ -51,27 +68,6 @@ const wasmInstanceWithImports = myApp({ someImport, moreImports });
 // product name can be omitted if only one executable target in the package
 // import myApp from "virtual:swift-wasm?init";
 ```
-
-### JavaScriptKit PackageToJS
-
-The `?js` mode runs `swift package … js` and re-exports the generated
-PackageToJS module. The Swift package must depend on
-[JavaScriptKit](https://github.com/swiftwasm/JavaScriptKit), which provides
-the `js` package command.
-
-```ts
-// index.ts
-import { init } from "virtual:swift-wasm?js&product=MyApp";
-
-const wasmInstance = await init();
-
-// product name can be omitted if only one executable target is in the package
-// import { init } from "virtual:swift-wasm?js";
-```
-
-PackageToJS's project-specific generated declarations remain available next to
-its generated module. The plugin's client declaration provides the standard
-`init` export with broad types.
 
 ## Configuration
 

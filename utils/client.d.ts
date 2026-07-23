@@ -33,9 +33,9 @@ declare module "virtual:swift-wasm?js*" {
   };
 
   /**
-   * Initializes the JavaScriptKit PackageToJS module.
+   * Initializes the JavaScriptKit module.
    *
-   * Project-specific bridge types are emitted by PackageToJS alongside its
+   * Project-specific bridge types are emitted by the js plugin alongside its
    * generated JavaScript entry module.
    */
   export function init(options?: Options): Promise<{
