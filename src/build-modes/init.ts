@@ -2,14 +2,14 @@ import path from "node:path";
 import { moduleImportSpecifier } from "../paths.ts";
 import type {
   BuildModeBuilder,
-  BuildModeDependencies,
   BuildOptions,
   BuildOutput,
+  SwiftBuildCommands,
 } from "./types.ts";
 
 export function createInitBuilder(
   options: BuildOptions,
-  dependencies: BuildModeDependencies,
+  swift: SwiftBuildCommands,
 ): BuildModeBuilder {
   const buildArgs = getInitBuildArgs(options);
   let output: BuildOutput | undefined;
@@ -17,13 +17,12 @@ export function createInitBuilder(
   return {
     commandArgs: ["build", ...buildArgs],
     async build() {
-      await dependencies.swift.run(["build", ...buildArgs]);
-      if (output) {
+      await swift.run(["build", ...buildArgs]);
+      if (output !== undefined) {
         return output;
       }
 
-      const buildOutputPath =
-        await dependencies.swift.getBuildOutputPath(buildArgs);
+      const buildOutputPath = await swift.getBuildOutputPath(buildArgs);
       const wasmModule = path.resolve(
         buildOutputPath,
         `${options.product}.wasm`,

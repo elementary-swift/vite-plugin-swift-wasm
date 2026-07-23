@@ -25,6 +25,7 @@ const buildOptions = {
 function fakeSwift(outputPath = "/tmp/swift-build") {
   const calls: string[][] = [];
   const outputPathCalls: string[][] = [];
+  const jsPluginChecks: string[] = [];
   const swift: SwiftBuildCommands = {
     async run(args) {
       calls.push(args);
@@ -33,8 +34,12 @@ function fakeSwift(outputPath = "/tmp/swift-build") {
       outputPathCalls.push(args);
       return outputPath;
     },
+    async ensurePlugin(packagePath, pluginName) {
+      assert.equal(pluginName, "js");
+      jsPluginChecks.push(packagePath);
+    },
   };
-  return { calls, outputPathCalls, swift };
+  return { calls, outputPathCalls, jsPluginChecks, swift };
 }
 
 test("init strategy owns its command, output, and module source", async () => {
@@ -54,7 +59,7 @@ test("init strategy owns its command, output, and module source", async () => {
   ]);
 
   const { calls, outputPathCalls, swift } = fakeSwift();
-  const builder = createInitBuilder(buildOptions, { swift });
+  const builder = createInitBuilder(buildOptions, swift);
   const output = await builder.build();
   const rebuiltOutput = await builder.build();
 
@@ -98,17 +103,19 @@ test("js strategy owns PackageToJS arguments and generated artifacts", async () 
     wasmModule: path.join(outputDirectory, "Hello.wasm"),
   });
 
-  const { calls, swift } = fakeSwift();
+  const { calls, jsPluginChecks, swift } = fakeSwift();
   const builder = createJSBuilder(
     {
       ...buildOptions,
       packagePath: "/tmp/package",
     },
-    { swift },
+    swift,
   );
+  await builder.prepare?.();
   const output = await builder.build();
 
   assert.deepEqual(calls, [builder.commandArgs]);
+  assert.deepEqual(jsPluginChecks, ["/tmp/package"]);
   assert.equal(output.entryModule.endsWith("/index.js"), true);
   assert.equal(output.wasmModule.endsWith("/Hello.wasm"), true);
   assert.match(builder.moduleSource(output), /^export \* from /);

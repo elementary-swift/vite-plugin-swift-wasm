@@ -3,26 +3,26 @@ import { createInitBuilder } from "./init.ts";
 import { createJSBuilder } from "./js.ts";
 import type {
   BuildModeBuilder,
-  BuildModeDependencies,
   BuildOptions,
+  SwiftBuildCommands,
 } from "./types.ts";
 
 export type {
   BuildModeBuilder,
-  BuildModeDependencies,
   BuildOptions,
   BuildOutput,
+  SwiftBuildCommands,
 } from "./types.ts";
 
 export function createBuildModeBuilder(
   mode: BuildMode,
   options: BuildOptions,
-  dependencies: BuildModeDependencies,
+  swift: SwiftBuildCommands,
 ): BuildModeBuilder {
   switch (mode) {
     case "init":
-      return createInitBuilder(options, dependencies);
+      return createInitBuilder(options, swift);
     case "js":
-      return createJSBuilder(options, dependencies);
+      return createJSBuilder(options, swift);
   }
 }

@@ -15,14 +15,12 @@ export type BuildOutput = {
 export type SwiftBuildCommands = {
   run(args: string[]): Promise<void>;
   getBuildOutputPath(buildArgs: string[]): Promise<string>;
-};
-
-export type BuildModeDependencies = {
-  swift: SwiftBuildCommands;
+  ensurePlugin(packagePath: string, pluginName: string): Promise<void>;
 };
 
 export type BuildModeBuilder = {
   commandArgs: string[];
+  prepare?(): Promise<void>;
   build(): Promise<BuildOutput>;
   moduleSource(output: BuildOutput): string;
 };

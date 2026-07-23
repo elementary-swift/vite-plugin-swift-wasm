@@ -2,22 +2,31 @@ import path from "node:path";
 import { moduleImportSpecifier } from "../paths.ts";
 import type {
   BuildModeBuilder,
-  BuildModeDependencies,
   BuildOptions,
   BuildOutput,
+  SwiftBuildCommands,
 } from "./types.ts";
 
 export function createJSBuilder(
   options: BuildOptions,
-  dependencies: BuildModeDependencies,
+  swift: SwiftBuildCommands,
 ): BuildModeBuilder {
   const outputDirectory = getJSOutputDirectory(options);
   const commandArgs = getJSBuildArgs(options, outputDirectory);
 
   return {
     commandArgs,
+    async prepare() {
+      try {
+        await swift.ensurePlugin(options.packagePath, "js");
+      } catch {
+        throw new Error(
+          `The SwiftPM "js" plugin is not available. Add JavaScriptKit as a dependency to the Swift package: https://github.com/swiftwasm/JavaScriptKit`,
+        );
+      }
+    },
     async build() {
-      await dependencies.swift.run(commandArgs);
+      await swift.run(commandArgs);
       return getJSBuildOutput(outputDirectory, options.product);
     },
     moduleSource(output) {

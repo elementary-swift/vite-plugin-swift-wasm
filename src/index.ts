@@ -144,8 +144,9 @@ export default function swiftWasm(
       const builder = createBuildModeBuilder(
         request.mode,
         await resolveBuildOptions(product),
-        { swift },
+        swift,
       );
+      await builder.prepare?.();
 
       logger.info(`Building ${product}...`);
       console.debug(

@@ -77,6 +77,25 @@ export class SwiftToolchain {
     ]);
   }
 
+  async ensurePlugin(packagePath: string, pluginName: string): Promise<void> {
+    let plugins: string;
+    try {
+      plugins = await this.runner.capture(this.command, [
+        "package",
+        "--package-path",
+        packagePath,
+        "plugin",
+        "--list",
+      ]);
+    } catch {
+      throw new Error(`Could not verify the SwiftPM "${pluginName}" plugin.`);
+    }
+
+    if (!hasPlugin(plugins, pluginName)) {
+      throw new Error(`The SwiftPM "${pluginName}" plugin is not available.`);
+    }
+  }
+
   private warnIfXcodeToolchainDetected(compilerTag: string): void {
     if (!/^swiftlang-(\d+\.){4,}/.test(compilerTag)) {
       return;
@@ -88,6 +107,14 @@ export class SwiftToolchain {
       ),
     );
   }
+}
+
+function hasPlugin(pluginList: string, pluginName: string): boolean {
+  const escapedPluginName = pluginName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `^\\s*['‘"]${escapedPluginName}['’"]\\s+\\(plugin\\b`,
+    "m",
+  ).test(pluginList);
 }
 
 export function getToolsetBuildArgs(
