@@ -77,23 +77,16 @@ export class SwiftToolchain {
     ]);
   }
 
-  async ensurePlugin(packagePath: string, pluginName: string): Promise<void> {
-    let plugins: string;
-    try {
-      plugins = await this.runner.capture(this.command, [
-        "package",
-        "--package-path",
-        packagePath,
-        "plugin",
-        "--list",
-      ]);
-    } catch {
-      throw new Error(`Could not verify the SwiftPM "${pluginName}" plugin.`);
-    }
+  async hasPlugin(packagePath: string, pluginName: string): Promise<boolean> {
+    const plugins = await this.runner.capture(this.command, [
+      "package",
+      "--package-path",
+      packagePath,
+      "plugin",
+      "--list",
+    ]);
 
-    if (!hasPlugin(plugins, pluginName)) {
-      throw new Error(`The SwiftPM "${pluginName}" plugin is not available.`);
-    }
+    return pluginListIncludes(plugins, pluginName);
   }
 
   private warnIfXcodeToolchainDetected(compilerTag: string): void {
@@ -109,7 +102,7 @@ export class SwiftToolchain {
   }
 }
 
-function hasPlugin(pluginList: string, pluginName: string): boolean {
+function pluginListIncludes(pluginList: string, pluginName: string): boolean {
   const escapedPluginName = pluginName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
     `^\\s*['‘"]${escapedPluginName}['’"]\\s+\\(plugin\\b`,

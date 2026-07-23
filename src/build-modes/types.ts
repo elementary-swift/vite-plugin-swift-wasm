@@ -15,7 +15,7 @@ export type BuildOutput = {
 export type SwiftBuildCommands = {
   run(args: string[]): Promise<void>;
   getBuildOutputPath(buildArgs: string[]): Promise<string>;
-  ensurePlugin(packagePath: string, pluginName: string): Promise<void>;
+  hasPlugin(packagePath: string, pluginName: string): Promise<boolean>;
 };
 
 export type BuildModeBuilder = {

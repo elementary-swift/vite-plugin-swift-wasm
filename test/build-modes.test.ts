@@ -22,7 +22,7 @@ const buildOptions = {
   extraBuildArgs: ["-Xswiftc", "-Ounchecked"],
 };
 
-function fakeSwift(outputPath = "/tmp/swift-build") {
+function fakeSwift(outputPath = "/tmp/swift-build", hasJSPlugin = true) {
   const calls: string[][] = [];
   const outputPathCalls: string[][] = [];
   const jsPluginChecks: string[] = [];
@@ -34,9 +34,10 @@ function fakeSwift(outputPath = "/tmp/swift-build") {
       outputPathCalls.push(args);
       return outputPath;
     },
-    async ensurePlugin(packagePath, pluginName) {
+    async hasPlugin(packagePath, pluginName) {
       assert.equal(pluginName, "js");
       jsPluginChecks.push(packagePath);
+      return hasJSPlugin;
     },
   };
   return { calls, outputPathCalls, jsPluginChecks, swift };
@@ -119,6 +120,19 @@ test("js strategy owns PackageToJS arguments and generated artifacts", async () 
   assert.equal(output.entryModule.endsWith("/index.js"), true);
   assert.equal(output.wasmModule.endsWith("/Hello.wasm"), true);
   assert.match(builder.moduleSource(output), /^export \* from /);
+});
+
+test("js strategy explains how to install a missing plugin", async () => {
+  const { swift } = fakeSwift("/tmp/swift-build", false);
+  const builder = createJSBuilder(buildOptions, swift);
+  if (!builder.prepare) {
+    throw new Error("js builder must provide a prepare hook");
+  }
+
+  await assert.rejects(
+    builder.prepare(),
+    /Add JavaScriptKit as a dependency.*github\.com\/swiftwasm\/JavaScriptKit/,
+  );
 });
 
 test("creates portable Vite import specifiers", () => {

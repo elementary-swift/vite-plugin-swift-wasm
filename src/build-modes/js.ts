@@ -17,9 +17,7 @@ export function createJSBuilder(
   return {
     commandArgs,
     async prepare() {
-      try {
-        await swift.ensurePlugin(options.packagePath, "js");
-      } catch {
+      if (!(await swift.hasPlugin(options.packagePath, "js"))) {
         throw new Error(
           `The SwiftPM "js" plugin is not available. Add JavaScriptKit as a dependency to the Swift package: https://github.com/swiftwasm/JavaScriptKit`,
         );
