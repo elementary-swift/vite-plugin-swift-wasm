@@ -9,3 +9,13 @@ declare module "virtual:swift-wasm?init*" {
   ) => Promise<WebAssembly.Instance>;
   export default initWasm;
 }
+
+declare module "virtual:swift-wasm?js*" {
+  /**
+   * Initializes the JavaScriptKit PackageToJS module.
+   *
+   * Project-specific bridge types are emitted by PackageToJS alongside its
+   * generated JavaScript entry module.
+   */
+  export const init: (options?: unknown) => Promise<unknown>;
+}

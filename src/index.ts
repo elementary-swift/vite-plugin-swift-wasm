@@ -1,12 +1,22 @@
-import { spawn } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { type Plugin, createLogger } from "vite";
 import colors from "picocolors";
-
-let wasmOptBin: string = process.env.WASM_OPT_BIN ?? "wasm-opt";
-let swiftBin: string = process.env.SWIFT_BIN ?? "swift";
-let swiftSDKID: string | undefined = process.env.SWIFT_SDK_ID;
+import { createLogger, type Plugin } from "vite";
+import {
+  createBuildModeBuilder,
+  type BuildOptions,
+  type BuildOutput,
+} from "./build-modes/index.ts";
+import { CommandRunner, quoteArgsForDisplay } from "./command.ts";
+import { moduleImportSpecifier } from "./paths.ts";
+import { createReloadDebouncer, createThrottledRebuilder } from "./rebuild.ts";
+import { getToolsetBuildArgs, SwiftToolchain } from "./swift.ts";
+import {
+  parseResolvedSwiftWasmVirtualModule,
+  resolveSwiftWasmVirtualModule,
+  virtualModuleProductExample,
+  type VirtualModuleRequest,
+} from "./virtual-module.ts";
+import { WasmOptimizer } from "./wasm-opt.ts";
 
 const DEFAULT_WASM_OPT_ARGS = ["-Os", "--strip-debug"];
 
@@ -59,58 +69,58 @@ type SwiftWasmPluginOptions = {
   wasmOptArgs?: string[];
 };
 
-export default function swiftWasm(options?: SwiftWasmPluginOptions): Plugin {
-  let useWasmOpt = options?.useWasmOpt ?? true;
-  let useEmbeddedSwift = options?.useEmbeddedSDK ?? false;
-  let linkEmbeddedUnicodeDataTables =
-    options?.linkEmbeddedUnicodeDataTables ?? true;
-  const wasmOptArgs = options?.wasmOptArgs ?? DEFAULT_WASM_OPT_ARGS;
-  const packagePath = options?.packagePath ?? ".";
-  const extraBuildArgs = options?.extraBuildArgs ?? [];
+export default function swiftWasm(
+  options: SwiftWasmPluginOptions = {},
+): Plugin {
+  const packagePath = options.packagePath ?? ".";
+  const runner = new CommandRunner();
+  const swift = new SwiftToolchain(
+    runner,
+    process.env.SWIFT_BIN ?? "swift",
+    process.env.SWIFT_SDK_ID,
+    logger,
+  );
+  const wasmOptimizer = new WasmOptimizer(
+    runner,
+    process.env.WASM_OPT_BIN ?? "wasm-opt",
+    options.wasmOptArgs ?? DEFAULT_WASM_OPT_ARGS,
+    logger,
+  );
 
-  const VIRTUAL_PREFIX = "virtual:swift-wasm?init";
-  const RESOLVED_PREFIX = "\0" + VIRTUAL_PREFIX;
+  let useWasmOpt = options.useWasmOpt ?? true;
+  let useEmbeddedSwift = options.useEmbeddedSDK ?? false;
+  let isDev = false;
 
-  // NOTE: this could theoretically be several, but not for now
-  let wasmModule: string | undefined;
+  // Only one imported Swift module is supported for now.
   let watchedSourcesFolders: string[] = [];
-  let swiftBuildArgs: string[] = [];
-  let isDev: boolean = false;
-  let rebuildFn: (() => Promise<void>) | undefined;
+  let rebuild: (() => Promise<void>) | undefined;
 
-  const reloadDebouncer = makeDebouncer(20);
+  const reloadDebouncer = createReloadDebouncer(20);
 
-  // Plugin implementation
   return {
     name: "swift-wasm-plugin",
     enforce: "pre",
+
     async config(_, { command }) {
       isDev = command === "serve";
 
-      // never optimize in development
       if (isDev) {
         useWasmOpt = false;
         useEmbeddedSwift = false;
       }
 
-      // check if wasm-opt is available if needed
-      if (useWasmOpt) {
-        try {
-          await execCommand(wasmOptBin, ["--version"]);
-        } catch (error) {
-          logger.warn(
-            colors.red(
-              `[!] wasm-opt is not available, disabling optimization...`,
-            ),
-          );
-          logger.warn(
-            "Please make sure binaryen tools are installed or disable wasm-opt setting.",
-          );
-          useWasmOpt = false;
-        }
+      if (useWasmOpt && !(await wasmOptimizer.isAvailable())) {
+        logger.warn(
+          colors.red(
+            `[!] wasm-opt is not available, disabling optimization...`,
+          ),
+        );
+        logger.warn(
+          "Please make sure binaryen tools are installed or disable wasm-opt setting.",
+        );
+        useWasmOpt = false;
       }
 
-      // add swift .build directory to ignored watch paths
       return {
         server: {
           watch: {
@@ -119,388 +129,135 @@ export default function swiftWasm(options?: SwiftWasmPluginOptions): Plugin {
         },
       };
     },
-    async resolveId(id) {
-      if (id.startsWith(VIRTUAL_PREFIX)) {
-        return "\0" + id;
-      }
-      return null;
+
+    resolveId(id) {
+      return resolveSwiftWasmVirtualModule(id);
     },
+
     async load(id) {
-      if (id.startsWith(RESOLVED_PREFIX)) {
-        const { product } = await resolveParams(id, packagePath);
-
-        if (!product) {
-          throw new Error(
-            `Main executable product could not be determined, please use "import myApp from "${VIRTUAL_PREFIX}&product=<target-name>".`,
-          );
-        }
-
-        const configuration = isDev ? "debug" : "release";
-
-        swiftBuildArgs = getSwiftBuildArgs({
-          swiftSDK: await resolveSwiftSDKID(useEmbeddedSwift),
-          packagePath,
-          product: product,
-          configuration,
-          extraBuildArgs: [
-            ...toolsetBuildArgs(
-              useEmbeddedSwift,
-              linkEmbeddedUnicodeDataTables,
-            ),
-            ...extraBuildArgs,
-          ],
-        });
-
-        logger.info(`Building ${product}...`);
-        console.debug(
-          colors.bold(
-            colors.gray(
-              `$ ${swiftBin} build ${quoteArgsForDisplay(swiftBuildArgs)}`,
-            ),
-          ),
-        );
-
-        await runSwiftBuild(swiftBuildArgs);
-
-        if (isDev) {
-          watchedSourcesFolders.push(path.resolve(packagePath, "Sources"));
-          rebuildFn = createThrottledRebuilder(swiftBuildArgs);
-        }
-
-        const relativeBuildOutputPath = path.relative(
-          process.cwd(),
-          await getBuildOutputPath(swiftBuildArgs),
-        );
-
-        wasmModule = `./${relativeBuildOutputPath}/${product}.wasm`;
-
-        if (useWasmOpt) {
-          await optimizeWasm(wasmModule, wasmOptArgs);
-        }
-
-        logger.info(`Done: ${colors.green(wasmModule)}`);
-
-        if (isDev) {
-          logger.info(
-            `Watching ${colors.green(
-              watchedSourcesFolders
-                .map((folder) => path.relative(process.cwd(), folder))
-                .join(", "),
-            )} for changes`,
-          );
-        }
-
-        return `export { default } from "${wasmModule}?init";`;
+      const request = parseResolvedSwiftWasmVirtualModule(id);
+      if (!request) {
+        return null;
       }
-      return null;
-    },
-    hotUpdate(options) {
-      if (
-        rebuildFn &&
-        options.file.endsWith(".swift") &&
-        watchedSourcesFolders.some((folder) => options.file.startsWith(folder))
-      ) {
-        if (!reloadDebouncer.shouldReload()) {
-          return [];
+
+      const product = await resolveProduct(request);
+      const builder = createBuildModeBuilder(
+        request.mode,
+        await resolveBuildOptions(product),
+        { swift },
+      );
+
+      logger.info(`Building ${product}...`);
+      console.debug(
+        colors.bold(
+          colors.gray(
+            `$ ${swift.command} ${quoteArgsForDisplay(builder.commandArgs)}`,
+          ),
+        ),
+      );
+
+      const build = async (): Promise<BuildOutput> => {
+        const output = await builder.build();
+        if (useWasmOpt) {
+          await wasmOptimizer.optimize(output.wasmModule);
         }
+        return output;
+      };
 
-        const relativeFile = path.relative(process.cwd(), options.file);
-        logger.info(colors.green(`${relativeFile} changed, rebuilding...`));
+      const output = await build();
+      logger.info(
+        `Done: ${colors.green(moduleImportSpecifier(output.entryModule))}`,
+      );
 
-        // TODO: maybe debounce builds too (only one pending build at a time)
-        rebuildFn()
-          .then(() => {
-            options.server.ws.send({ type: "full-reload" });
-          })
-          .catch((error) => {
-            logger.warn(`Rebuild failed.`);
-          });
+      if (isDev) {
+        watchedSourcesFolders = [path.resolve(packagePath, "Sources")];
+        rebuild = createThrottledRebuilder(async () => {
+          await build();
+        }, logger.warn);
+        logWatchedSources();
+      }
 
+      return builder.moduleSource(output);
+    },
+
+    hotUpdate(context) {
+      if (
+        !rebuild ||
+        !context.file.endsWith(".swift") ||
+        !watchedSourcesFolders.some((folder) => context.file.startsWith(folder))
+      ) {
+        return;
+      }
+
+      if (!reloadDebouncer.shouldReload()) {
         return [];
       }
+
+      const relativeFile = path.relative(process.cwd(), context.file);
+      logger.info(colors.green(`${relativeFile} changed, rebuilding...`));
+
+      rebuild()
+        .then(() => {
+          context.server.ws.send({ type: "full-reload" });
+        })
+        .catch(() => {
+          logger.warn(`Rebuild failed.`);
+        });
+
+      return [];
     },
   };
-  // End of plugin implementation
 
-  async function resolveParams(id: string, packagePath: string) {
-    let product: string | undefined;
-
-    const queryParams = id.slice(VIRTUAL_PREFIX.length).split("&").slice(1);
-
-    for (const param of queryParams) {
-      const [key, value] = param.split("=");
-      switch (key) {
-        case "product":
-          product = value;
-          break;
-        default:
-          throw new Error(`Unknown query parameter: ${key}`);
-      }
+  async function resolveProduct(
+    request: VirtualModuleRequest,
+  ): Promise<string> {
+    if (request.product) {
+      return request.product;
     }
 
-    if (!product) {
-      const resolvedProduct = await getSingleExecutableTarget(packagePath);
-      if (!resolvedProduct) {
-        throw new Error(
-          `Main executable product could not be determined, please use "import myApp from "${VIRTUAL_PREFIX}&product=<target-name>".`,
-        );
-      }
-      product = resolvedProduct;
+    const product = await swift.getSingleExecutableTarget(packagePath);
+    if (product) {
+      return product;
     }
 
+    throw new Error(
+      `Main executable product could not be determined, please use "import myApp from "${virtualModuleProductExample(request.mode)}".`,
+    );
+  }
+
+  async function resolveBuildOptions(product: string): Promise<BuildOptions> {
     return {
+      swiftSDK: await swift.resolveSDKID(useEmbeddedSwift),
+      packagePath,
       product,
+      configuration: isDev ? "debug" : "release",
+      toolsetArgs: getToolsetBuildArgs(
+        useEmbeddedSwift,
+        options.linkEmbeddedUnicodeDataTables ?? true,
+      ),
+      extraBuildArgs: options.extraBuildArgs ?? [],
     };
   }
-}
 
-async function resolveSwiftSDKID(useEmbeddedSwift: boolean): Promise<string> {
-  if (swiftSDKID) {
-    return swiftSDKID;
+  function logWatchedSources(): void {
+    const folders = watchedSourcesFolders
+      .map((folder) => path.relative(process.cwd(), folder))
+      .join(", ");
+    logger.info(`Watching ${colors.green(folders)} for changes`);
   }
-
-  let compilerTag = await getSwiftCompilerTag();
-  if (!compilerTag) {
-    throw new Error(
-      "Could not detect compiler tag for Swift SDK ID. Verify the Swift toolchain version or set the SWIFT_SDK_ID environment variable manually.",
-    );
-  }
-
-  warnIfXcodeToolchainDetected(compilerTag);
-
-  swiftSDKID = compilerTag + "_wasm";
-  if (useEmbeddedSwift) {
-    swiftSDKID += "-embedded";
-  }
-
-  return swiftSDKID;
-}
-
-type SwiftBuildOptions = {
-  swiftSDK: string;
-  packagePath: string;
-  product: string;
-  configuration: string;
-  extraBuildArgs: string[];
-};
-
-function getSwiftBuildArgs(opts: SwiftBuildOptions): string[] {
-  return [
-    "--package-path",
-    opts.packagePath,
-    "--swift-sdk",
-    opts.swiftSDK,
-    "--configuration",
-    opts.configuration,
-    "--product",
-    opts.product,
-    ...opts.extraBuildArgs,
-  ];
-}
-
-async function runSwiftBuild(args: string[]): Promise<void> {
-  await runCommand(swiftBin, ["build", ...args]);
-}
-
-async function optimizeWasm(
-  wasmPath: string,
-  wasmOptArgs: string[],
-): Promise<void> {
-  logger.info(`Optimizing ${wasmPath}...`);
-
-  const args = [wasmPath, "-o", wasmPath, ...wasmOptArgs];
-  console.debug(
-    colors.bold(colors.gray(`$ ${wasmOptBin} ${quoteArgsForDisplay(args)}`)),
-  );
-  await runCommand(wasmOptBin, args);
-}
-
-async function execCommand(cmd: string, args: string[]): Promise<string> {
-  const output = await runCommand(cmd, args, { capture: true });
-  return output ?? "";
-}
-
-async function getSwiftCompilerTag(): Promise<string | undefined> {
-  const output = await execCommand(swiftBin, ["-print-target-info"]);
-  const targetInfo = JSON.parse(output);
-  return targetInfo.swiftCompilerTag;
-}
-
-function warnIfXcodeToolchainDetected(compilerTag: string | undefined): void {
-  function isXcodeSwiftCompilerTag(tag: string): boolean {
-    return /^swiftlang-(\d+\.){4,}/.test(tag);
-  }
-
-  if (!compilerTag || !isXcodeSwiftCompilerTag(compilerTag)) {
-    return;
-  }
-
-  logger.warn(
-    colors.yellow(
-      `[!] Xcode Swift toolchain detected. Cross-compiling to WebAssembly is likely to fail with Swift version ${compilerTag}. Make sure to use a Swift.org toolchain: https://www.swift.org/install/`,
-    ),
-  );
-}
-
-async function getSingleExecutableTarget(
-  packagePath: string,
-): Promise<string | undefined> {
-  const output = await execCommand(swiftBin, [
-    "package",
-    "show-executables",
-    "--package-path",
-    packagePath,
-    "--format",
-    "json",
-  ]);
-  const executables = JSON.parse(output).filter((e: any) => !e.package);
-  if (executables.length !== 1) {
-    return undefined;
-  }
-  return executables[0].name ?? undefined;
-}
-
-async function getBuildOutputPath(args: string[]): Promise<string> {
-  return await execCommand(swiftBin, ["build", "--show-bin-path", ...args]);
-}
-
-function quoteArgsForDisplay(args: string[]): string {
-  return args.map((arg) => (arg.includes(" ") ? `"${arg}"` : arg)).join(" ");
-}
-
-async function runCommand(
-  cmd: string,
-  args: string[],
-  options?: { capture?: boolean },
-): Promise<string | undefined> {
-  const capture = options?.capture ?? false;
-
-  // Set up environment with node_modules/.bin in PATH if needed
-  const env = { ...process.env };
-
-  return await new Promise<string | undefined>((resolve, reject) => {
-    const child = spawn(cmd, args, {
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-
-    child.stdout.on("data", (d: Buffer) => {
-      const data = d.toString();
-      if (capture) {
-        stdout += data;
-      } else {
-        console.debug(colors.gray(data.trimEnd()));
-      }
-    });
-
-    child.stderr.on("data", (d: Buffer) =>
-      console.debug(colors.yellow(d.toString().trimEnd())),
-    );
-
-    child.on("error", reject);
-    child.on("close", (code: number | null) => {
-      if (code === 0) resolve(capture ? stdout.trim() : undefined);
-      else
-        reject(
-          new Error(
-            `Command failed (${code}): ${cmd} ${quoteArgsForDisplay(args)}`,
-          ),
-        );
-    });
-  });
-}
-
-function makeDebouncer(delayMs: number) {
-  let lastTime = 0;
-  return {
-    shouldReload: () => {
-      const now = Date.now();
-      if (now - lastTime < delayMs) {
-        return false;
-      }
-      lastTime = now;
-      return true;
-    },
-  };
-}
-
-function createThrottledRebuilder(swiftBuildArgs: string[]) {
-  let runningBuildCount = 0;
-  let queuedRebuild: Promise<void> | null = null;
-
-  return async () => {
-    if (queuedRebuild) {
-      return queuedRebuild;
-    }
-
-    runningBuildCount++;
-    try {
-      let currentBuild = runSwiftBuild(swiftBuildArgs);
-      if (runningBuildCount > 1) {
-        queuedRebuild = currentBuild;
-      }
-
-      await currentBuild;
-    } finally {
-      if (runningBuildCount > 2) {
-        logger.warn(`This should not happen: runningBuildCount > 2`);
-      }
-      runningBuildCount--;
-      if (runningBuildCount === 1) {
-        queuedRebuild = null;
-      }
-    }
-  };
-}
-
-function toolsetBuildArgs(
-  isEmbedded: boolean,
-  linkEmbeddedUnicodeDataTables: boolean,
-): string[] {
-  let args: string[] = [];
-
-  if (isEmbedded && linkEmbeddedUnicodeDataTables) {
-    args.push(
-      "--toolset",
-      toolsetPathFromPwd("../utils/embedded-unicode-toolset.json"),
-    );
-  }
-
-  args.push(
-    "--toolset",
-    toolsetPathFromPwd("../utils/wasm-reactor-toolset.json"),
-  );
-
-  return args;
-}
-
-function toolsetPathFromPwd(toolsetPathRelativeToThisModule: string): string {
-  const absPath = fileURLToPath(
-    new URL(toolsetPathRelativeToThisModule, import.meta.url),
-  );
-  let relPath = path.relative(process.cwd(), absPath);
-
-  // Make it explicit that this is a relative path (helps when printing commands)
-  if (!relPath.startsWith(".") && !path.isAbsolute(relPath)) {
-    relPath = `.${path.sep}${relPath}`;
-  }
-
-  return relPath;
 }
 
 const logger = (() => {
-  const _logger = createLogger(undefined, {
+  const viteLogger = createLogger(undefined, {
     prefix: colors.magenta("[swift-wasm]"),
   });
 
   return {
-    info: (message: string) => {
-      _logger.info(message, { timestamp: true });
+    info(message: string) {
+      viteLogger.info(message, { timestamp: true });
     },
-    warn: (message: string) => {
-      _logger.warn(message, { timestamp: true });
+    warn(message: string) {
+      viteLogger.warn(message, { timestamp: true });
     },
   };
 })();

@@ -5,7 +5,7 @@ A Vite plugin for Swift WebAssembly integration.
 ## Features
 
 - add support for importing an executable target from a local SwiftPM package
-- simple syntax: `import myApp from "virtual:swift-wasm?init"`
+- supports raw WebAssembly (`?init`) and JavaScriptKit PackageToJS (`?js`) build modes
 - automatically detects matching Swift SDK for WebAssembly and builds a reactor module
 - watches changes of \*.swift files and triggers instant rebuild and reload
 - for release builds: optimizes binary using wasm-opt (must be installed separately)
@@ -38,6 +38,8 @@ export default defineConfig({
 });
 ```
 
+### Raw WebAssembly
+
 ```ts
 // index.ts
 import myApp from "virtual:swift-wasm?init&product=MyApp";
@@ -50,6 +52,27 @@ const wasmInstanceWithImports = myApp({ someImport, moreImports });
 // import myApp from "virtual:swift-wasm?init";
 ```
 
+### JavaScriptKit PackageToJS
+
+The `?js` mode runs `swift package … js` and re-exports the generated
+PackageToJS module. The Swift package must depend on
+[JavaScriptKit](https://github.com/swiftwasm/JavaScriptKit), which provides
+the `js` package command.
+
+```ts
+// index.ts
+import { init } from "virtual:swift-wasm?js&product=MyApp";
+
+const wasmInstance = await init();
+
+// product name can be omitted if only one executable target is in the package
+// import { init } from "virtual:swift-wasm?js";
+```
+
+PackageToJS's project-specific generated declarations remain available next to
+its generated module. The plugin's client declaration provides the standard
+`init` export with broad types.
+
 ## Configuration
 
 All options with their default values:
@@ -59,7 +82,8 @@ swiftWasm({
   // Path to the Swift package
   packagePath: ".",
 
-  // Additional arguments to pass to swift build
+  // Additional arguments passed to the Swift build command
+  // In ?js mode, these are passed to `swift package` after --swift-sdk.
   extraBuildArgs: [],
 
   // Use Embedded Swift variant (production builds only)
@@ -70,7 +94,8 @@ swiftWasm({
   // Only relevant when useEmbeddedSDK is true
   linkEmbeddedUnicodeDataTables: true,
 
-  // Optimize WebAssembly module with wasm-opt (production builds only)
+  // Optimize the generated WebAssembly module with wasm-opt
+  // (production builds only, including ?js mode)
   useWasmOpt: true,
 
   // Arguments to pass to wasm-opt

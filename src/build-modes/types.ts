@@ -1,0 +1,28 @@
+export type BuildOptions = {
+  swiftSDK: string;
+  packagePath: string;
+  product: string;
+  configuration: string;
+  toolsetArgs: string[];
+  extraBuildArgs: string[];
+};
+
+export type BuildOutput = {
+  entryModule: string;
+  wasmModule: string;
+};
+
+export type SwiftBuildCommands = {
+  run(args: string[]): Promise<void>;
+  getBuildOutputPath(buildArgs: string[]): Promise<string>;
+};
+
+export type BuildModeDependencies = {
+  swift: SwiftBuildCommands;
+};
+
+export type BuildModeBuilder = {
+  commandArgs: string[];
+  build(): Promise<BuildOutput>;
+  moduleSource(output: BuildOutput): string;
+};
