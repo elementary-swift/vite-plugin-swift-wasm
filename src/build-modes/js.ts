@@ -54,7 +54,7 @@ export function getJSBuildArgs(
 export function getJSOutputDirectory(options: BuildOptions): string {
   return path.resolve(
     options.packagePath,
-    ".build",
+    ".build/plugins/PackageToJS/outputs",
     "vite-plugin-swift-wasm",
     options.product,
     options.configuration,
