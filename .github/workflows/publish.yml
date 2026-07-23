@@ -29,4 +29,10 @@ jobs:
       - run: pnpm install
       - run: pnpm typecheck & pnpm format:check
       - run: pnpm build
-      - run: npm publish
+      - name: Publish
+        run: |
+          if [[ "$(node -p 'require("./package.json").version')" == *-* ]]; then
+            npm publish --tag next
+          else
+            npm publish
+          fi
