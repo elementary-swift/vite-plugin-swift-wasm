@@ -1,5 +1,6 @@
 import path from "node:path";
 import { moduleImportSpecifier } from "../paths.ts";
+import type { VirtualModuleRequest } from "../virtual-module.ts";
 import type {
   BuildModeBuilder,
   BuildOptions,
@@ -7,9 +8,12 @@ import type {
   SwiftBuildCommands,
 } from "./types.ts";
 
+type JSModuleOptions = Pick<VirtualModuleRequest, "module">;
+
 export function createJSBuilder(
   options: BuildOptions,
   swift: SwiftBuildCommands,
+  moduleOptions: JSModuleOptions = {},
 ): BuildModeBuilder {
   const outputDirectory = getJSOutputDirectory(options);
   const commandArgs = getJSBuildArgs(options, outputDirectory);
@@ -28,11 +32,29 @@ export function createJSBuilder(
       return getJSBuildOutput(outputDirectory, options.product);
     },
     moduleSource(output) {
-      return `export * from ${JSON.stringify(
-        moduleImportSpecifier(output.entryModule),
-      )};`;
+      return getJSModuleSource(output, moduleOptions);
     },
   };
+}
+
+export function getJSModuleSource(
+  output: BuildOutput,
+  options: JSModuleOptions = {},
+): string {
+  const entryModule = JSON.stringify(moduleImportSpecifier(output.entryModule));
+  if (!options.module) {
+    return `export * from ${entryModule};`;
+  }
+
+  const wasmModule = JSON.stringify(
+    `${moduleImportSpecifier(output.wasmModule)}?module`,
+  );
+  return `import wasmModule from ${wasmModule};
+import { init as packageToJSInit } from ${entryModule};
+export * from ${entryModule};
+export function init(options = {}) {
+  return packageToJSInit({ module: wasmModule, ...options });
+}`;
 }
 
 export function getJSBuildArgs(

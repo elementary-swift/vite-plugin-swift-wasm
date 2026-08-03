@@ -52,6 +52,26 @@ const wasmInstance = await init();
 // import { init } from "virtual:swift-wasm?js";
 ```
 
+For runtimes that accept a precompiled `WebAssembly.Module`, such as worker
+environments, add the `module` flag:
+
+```ts
+import { init } from "virtual:swift-wasm?js&module&product=Worker";
+
+const wasmInstance = await init();
+```
+
+This imports the PackageToJS-generated `Worker.wasm?module` and uses it as
+`options.module`. The flag depends only on the bundler's `?module` support and
+does not detect a specific runtime. All other PackageToJS exports remain
+available, and an explicit option overrides the imported module:
+
+```ts
+await init({ module: anotherModule });
+```
+
+The `module` flag is supported only by `?js`; `?init&module` is invalid.
+
 ### Manual WebAssembly initialization
 
 The `?init` mode runs a plain `swift build` and re-exports Vite's

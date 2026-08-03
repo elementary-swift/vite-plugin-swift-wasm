@@ -1,4 +1,4 @@
-import type { BuildMode } from "../virtual-module.ts";
+import type { VirtualModuleRequest } from "../virtual-module.ts";
 import { createInitBuilder } from "./init.ts";
 import { createJSBuilder } from "./js.ts";
 import type {
@@ -15,14 +15,19 @@ export type {
 } from "./types.ts";
 
 export function createBuildModeBuilder(
-  mode: BuildMode,
+  request: VirtualModuleRequest,
   options: BuildOptions,
   swift: SwiftBuildCommands,
 ): BuildModeBuilder {
-  switch (mode) {
+  switch (request.mode) {
     case "init":
+      if (request.module) {
+        throw new Error(
+          `The "module" query parameter is only supported with the "js" build mode.`,
+        );
+      }
       return createInitBuilder(options, swift);
     case "js":
-      return createJSBuilder(options, swift);
+      return createJSBuilder(options, swift, request);
   }
 }

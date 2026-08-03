@@ -9,7 +9,9 @@ import {
   createJSBuilder,
   getJSBuildArgs,
   getJSBuildOutput,
+  getJSModuleSource,
 } from "../src/build-modes/js.ts";
+import { createBuildModeBuilder } from "../src/build-modes/index.ts";
 import type { SwiftBuildCommands } from "../src/build-modes/types.ts";
 import { moduleImportSpecifier } from "../src/paths.ts";
 
@@ -132,6 +134,62 @@ test("js strategy explains how to install a missing plugin", async () => {
   await assert.rejects(
     builder.prepare(),
     /Add JavaScriptKit as a dependency.*github\.com\/swiftwasm\/JavaScriptKit/,
+  );
+});
+
+test("js source keeps its existing re-export behavior by default", () => {
+  const output = {
+    entryModule: path.join(process.cwd(), ".build/package-to-js/index.js"),
+    wasmModule: path.join(process.cwd(), ".build/package-to-js/Hello.wasm"),
+  };
+
+  assert.equal(
+    getJSModuleSource(output),
+    'export * from "./.build/package-to-js/index.js";',
+  );
+});
+
+test("js module source imports Wasm and wraps only init", () => {
+  const output = {
+    entryModule: path.join(process.cwd(), ".build/package-to-js/index.js"),
+    wasmModule: path.join(process.cwd(), ".build/package-to-js/Worker.wasm"),
+  };
+
+  assert.equal(
+    getJSModuleSource(output, { module: true }),
+    `import wasmModule from "./.build/package-to-js/Worker.wasm?module";
+import { init as packageToJSInit } from "./.build/package-to-js/index.js";
+export * from "./.build/package-to-js/index.js";
+export function init(options = {}) {
+  return packageToJSInit({ module: wasmModule, ...options });
+}`,
+  );
+});
+
+test("build mode factory validates request flags", () => {
+  const { swift } = fakeSwift();
+
+  assert.throws(
+    () =>
+      createBuildModeBuilder(
+        { mode: "init", module: true },
+        buildOptions,
+        swift,
+      ),
+    /"module" query parameter is only supported with the "js" build mode/,
+  );
+
+  const builder = createBuildModeBuilder(
+    { mode: "js", module: true },
+    buildOptions,
+    swift,
+  );
+  assert.match(
+    builder.moduleSource({
+      entryModule: path.join(process.cwd(), ".build/package-to-js/index.js"),
+      wasmModule: path.join(process.cwd(), ".build/package-to-js/Worker.wasm"),
+    }),
+    /Worker\.wasm\?module/,
   );
 });
 
