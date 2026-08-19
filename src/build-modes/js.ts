@@ -65,6 +65,8 @@ export function getJSBuildArgs(
     "package",
     "--package-path",
     options.packagePath,
+    "--scratch-path",
+    options.scratchPath,
     "--swift-sdk",
     options.swiftSDK,
     ...options.toolsetArgs,
@@ -83,7 +85,8 @@ export function getJSBuildArgs(
 export function getJSOutputDirectory(options: BuildOptions): string {
   return path.resolve(
     options.packagePath,
-    ".build/plugins/PackageToJS/outputs",
+    options.scratchPath,
+    "plugins/PackageToJS/outputs",
     "vite-plugin-swift-wasm",
     options.product,
     options.configuration,

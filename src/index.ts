@@ -26,6 +26,13 @@ type SwiftWasmPluginOptions = {
    * @default "."
    */
   packagePath?: string;
+
+  /**
+   * The SwiftPM scratch directory, relative to the package path.
+   * @default ".build"
+   */
+  scratchPath?: string;
+
   /**
    * Additional arguments to pass to the Swift compiler.
    * @default []
@@ -230,6 +237,7 @@ export default function swiftWasm(
     return {
       swiftSDK: await swift.resolveSDKID(useEmbeddedSwift),
       packagePath,
+      scratchPath: options.scratchPath ?? ".build",
       product,
       configuration: isDev ? "debug" : "release",
       toolsetArgs: getToolsetBuildArgs(

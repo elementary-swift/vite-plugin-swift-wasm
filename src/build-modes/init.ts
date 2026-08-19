@@ -45,6 +45,8 @@ export function getInitBuildArgs(options: BuildOptions): string[] {
   return [
     "--package-path",
     options.packagePath,
+    "--scratch-path",
+    options.scratchPath,
     "--swift-sdk",
     options.swiftSDK,
     "--configuration",

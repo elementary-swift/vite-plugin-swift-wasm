@@ -18,6 +18,7 @@ import { moduleImportSpecifier } from "../src/paths.ts";
 const buildOptions = {
   swiftSDK: "swift-6.2.0-RELEASE_wasm",
   packagePath: "Examples/Hello",
+  scratchPath: ".build",
   product: "Hello",
   configuration: "release",
   toolsetArgs: ["--toolset", "./unicode-toolset.json"],
@@ -49,6 +50,8 @@ test("init strategy owns its command, output, and module source", async () => {
   assert.deepEqual(getInitBuildArgs(buildOptions), [
     "--package-path",
     "Examples/Hello",
+    "--scratch-path",
+    ".build",
     "--swift-sdk",
     "swift-6.2.0-RELEASE_wasm",
     "--configuration",
@@ -86,6 +89,8 @@ test("js strategy owns PackageToJS arguments and generated artifacts", async () 
     "package",
     "--package-path",
     "Examples/Hello",
+    "--scratch-path",
+    ".build",
     "--swift-sdk",
     "swift-6.2.0-RELEASE_wasm",
     "--toolset",
@@ -122,6 +127,22 @@ test("js strategy owns PackageToJS arguments and generated artifacts", async () 
   assert.equal(output.entryModule.endsWith("/index.js"), true);
   assert.equal(output.wasmModule.endsWith("/Hello.wasm"), true);
   assert.match(builder.moduleSource(output), /^export \* from /);
+});
+
+test("js strategy places output beneath the SwiftPM scratch path", () => {
+  const builder = createJSBuilder(
+    {
+      ...buildOptions,
+      packagePath: "/tmp/package",
+      scratchPath: ".build/worker",
+    },
+    fakeSwift().swift,
+  );
+
+  assert.equal(
+    builder.commandArgs.at(builder.commandArgs.indexOf("--output") + 1),
+    "/tmp/package/.build/worker/plugins/PackageToJS/outputs/vite-plugin-swift-wasm/Hello/release",
+  );
 });
 
 test("js strategy explains how to install a missing plugin", async () => {
