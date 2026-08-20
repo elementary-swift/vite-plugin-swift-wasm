@@ -8,6 +8,19 @@ type SwiftLogger = {
   warn(message: string): void;
 };
 
+type SwiftPackageDescription = {
+  path?: unknown;
+  products?: Array<{
+    name?: unknown;
+  }>;
+  targets?: Array<{
+    module_type?: unknown;
+    name?: unknown;
+    path?: unknown;
+    product_memberships?: unknown;
+  }>;
+};
+
 export class SwiftToolchain {
   private resolvedSDKID: string | undefined;
 
@@ -67,6 +80,61 @@ export class SwiftToolchain {
       return undefined;
     }
     return executables[0].name ?? undefined;
+  }
+
+  async getProductSourceDirectories(
+    packagePath: string,
+    product: string,
+  ): Promise<string[]> {
+    const output = await this.runner.capture(this.command, [
+      "package",
+      ...getPackagePathArgs(packagePath),
+      "describe",
+      "--type",
+      "json",
+    ]);
+    const description = JSON.parse(output) as SwiftPackageDescription;
+
+    if (!description.products?.some(({ name }) => name === product)) {
+      throw new Error(
+        `Product "${product}" was not found in the Swift package at "${packagePath}".`,
+      );
+    }
+
+    if (typeof description.path !== "string") {
+      throw new Error(
+        `Swift package description for "${packagePath}" does not contain a valid package path.`,
+      );
+    }
+
+    const sourceDirectories = new Set<string>();
+    for (const target of description.targets ?? []) {
+      if (
+        target.module_type !== "SwiftTarget" ||
+        !Array.isArray(target.product_memberships) ||
+        !target.product_memberships.includes(product)
+      ) {
+        continue;
+      }
+
+      if (typeof target.path !== "string") {
+        const targetName =
+          typeof target.name === "string" ? target.name : "unknown";
+        throw new Error(
+          `Swift target "${targetName}" in product "${product}" does not contain a valid source path.`,
+        );
+      }
+
+      sourceDirectories.add(path.resolve(description.path, target.path));
+    }
+
+    if (sourceDirectories.size === 0) {
+      throw new Error(
+        `No Swift source targets were found for product "${product}" in the package at "${packagePath}".`,
+      );
+    }
+
+    return [...sourceDirectories];
   }
 
   async getBuildOutputPath(buildArgs: string[]): Promise<string> {

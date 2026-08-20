@@ -18,6 +18,7 @@ import {
   type VirtualModuleRequest,
 } from "./virtual-module.ts";
 import { WasmOptimizer } from "./wasm-opt.ts";
+import { getWatchIgnorePattern, isWatchedSwiftSource } from "./watch.ts";
 
 const DEFAULT_WASM_OPT_ARGS = ["-Os", "--strip-debug"];
 
@@ -132,7 +133,12 @@ export default function swiftWasm(
       return {
         server: {
           watch: {
-            ignored: ["**/.build/**"],
+            ignored: [
+              getWatchIgnorePattern(
+                packagePath,
+                options.scratchPath ?? DEFAULT_SCRATCH_PATH,
+              ),
+            ],
           },
         },
       };
@@ -179,7 +185,10 @@ export default function swiftWasm(
       );
 
       if (isDev) {
-        watchedSourcesFolders = [path.resolve(packagePath, "Sources")];
+        watchedSourcesFolders = await swift.getProductSourceDirectories(
+          packagePath,
+          product,
+        );
         rebuild = createThrottledRebuilder(async () => {
           await build();
         }, logger.warn);
@@ -192,8 +201,7 @@ export default function swiftWasm(
     hotUpdate(context) {
       if (
         !rebuild ||
-        !context.file.endsWith(".swift") ||
-        !watchedSourcesFolders.some((folder) => context.file.startsWith(folder))
+        !isWatchedSwiftSource(context.file, watchedSourcesFolders)
       ) {
         return;
       }
