@@ -6,7 +6,6 @@ const readme = await readFile(new URL("../README.md", import.meta.url), "utf8");
 
 test("documents the portable WebAssembly.Module import mode", () => {
   assert.match(readme, /virtual:swift-wasm\?js&module&product=Worker/);
-  assert.match(readme, /PackageToJS-generated `Worker\.wasm\?module`/);
-  assert.match(readme, /explicit option overrides the imported module/);
+  assert.match(readme, /built WebAssembly file as `Worker\.wasm\?module`/);
   assert.match(readme, /`module` flag is supported only by `\?js`/);
 });

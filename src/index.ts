@@ -7,6 +7,7 @@ import {
   type BuildOutput,
 } from "./build-modes/index.ts";
 import { CommandRunner, quoteArgsForDisplay } from "./command.ts";
+import { DEFAULT_PACKAGE_PATH, DEFAULT_SCRATCH_PATH } from "./defaults.ts";
 import { moduleImportSpecifier } from "./paths.ts";
 import { createReloadDebouncer, createThrottledRebuilder } from "./rebuild.ts";
 import { getToolsetBuildArgs, SwiftToolchain } from "./swift.ts";
@@ -79,7 +80,7 @@ type SwiftWasmPluginOptions = {
 export default function swiftWasm(
   options: SwiftWasmPluginOptions = {},
 ): Plugin {
-  const packagePath = options.packagePath ?? ".";
+  const packagePath = options.packagePath ?? DEFAULT_PACKAGE_PATH;
   const runner = new CommandRunner();
   const swift = new SwiftToolchain(
     runner,
@@ -237,7 +238,7 @@ export default function swiftWasm(
     return {
       swiftSDK: await swift.resolveSDKID(useEmbeddedSwift),
       packagePath,
-      scratchPath: options.scratchPath ?? ".build",
+      scratchPath: options.scratchPath ?? DEFAULT_SCRATCH_PATH,
       product,
       configuration: isDev ? "debug" : "release",
       toolsetArgs: getToolsetBuildArgs(

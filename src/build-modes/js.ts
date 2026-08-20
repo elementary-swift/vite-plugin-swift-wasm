@@ -1,5 +1,6 @@
 import path from "node:path";
 import { moduleImportSpecifier } from "../paths.ts";
+import { getSwiftPMPathArgs } from "../swift.ts";
 import type { VirtualModuleRequest } from "../virtual-module.ts";
 import type {
   BuildModeBuilder,
@@ -63,10 +64,7 @@ export function getJSBuildArgs(
 ): string[] {
   return [
     "package",
-    "--package-path",
-    options.packagePath,
-    "--scratch-path",
-    options.scratchPath,
+    ...getSwiftPMPathArgs(options.packagePath, options.scratchPath),
     "--swift-sdk",
     options.swiftSDK,
     ...options.toolsetArgs,

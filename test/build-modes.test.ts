@@ -24,6 +24,11 @@ const buildOptions = {
   toolsetArgs: ["--toolset", "./unicode-toolset.json"],
   extraBuildArgs: ["-Xswiftc", "-Ounchecked"],
 };
+const defaultBuildOptions = {
+  ...buildOptions,
+  packagePath: ".",
+  scratchPath: ".build",
+};
 
 function fakeSwift(outputPath = "/tmp/swift-build", hasJSPlugin = true) {
   const calls: string[][] = [];
@@ -50,8 +55,6 @@ test("init strategy owns its command, output, and module source", async () => {
   assert.deepEqual(getInitBuildArgs(buildOptions), [
     "--package-path",
     "Examples/Hello",
-    "--scratch-path",
-    ".build",
     "--swift-sdk",
     "swift-6.2.0-RELEASE_wasm",
     "--configuration",
@@ -83,14 +86,45 @@ test("init strategy owns its command, output, and module source", async () => {
   assert.match(builder.moduleSource(output), /Hello\.wasm\?init/);
 });
 
+test("omits default SwiftPM package and scratch paths", () => {
+  assert.deepEqual(getInitBuildArgs(defaultBuildOptions), [
+    "--swift-sdk",
+    "swift-6.2.0-RELEASE_wasm",
+    "--configuration",
+    "release",
+    "--product",
+    "Hello",
+    "--toolset",
+    "./unicode-toolset.json",
+    "-Xswiftc",
+    "-Ounchecked",
+  ]);
+
+  assert.deepEqual(getJSBuildArgs(defaultBuildOptions, "/tmp/package-to-js"), [
+    "package",
+    "--swift-sdk",
+    "swift-6.2.0-RELEASE_wasm",
+    "--toolset",
+    "./unicode-toolset.json",
+    "-Xswiftc",
+    "-Ounchecked",
+    "js",
+    "--configuration",
+    "release",
+    "--product",
+    "Hello",
+    "--output",
+    "/tmp/package-to-js",
+    "--no-optimize",
+  ]);
+});
+
 test("js strategy owns PackageToJS arguments and generated artifacts", async () => {
   const outputDirectory = "/tmp/package-to-js";
   assert.deepEqual(getJSBuildArgs(buildOptions, outputDirectory), [
     "package",
     "--package-path",
     "Examples/Hello",
-    "--scratch-path",
-    ".build",
     "--swift-sdk",
     "swift-6.2.0-RELEASE_wasm",
     "--toolset",
@@ -143,6 +177,13 @@ test("js strategy places output beneath the SwiftPM scratch path", () => {
     builder.commandArgs.at(builder.commandArgs.indexOf("--output") + 1),
     "/tmp/package/.build/worker/plugins/PackageToJS/outputs/vite-plugin-swift-wasm/Hello/release",
   );
+  assert.deepEqual(builder.commandArgs.slice(0, 5), [
+    "package",
+    "--package-path",
+    "/tmp/package",
+    "--scratch-path",
+    ".build/worker",
+  ]);
 });
 
 test("js strategy explains how to install a missing plugin", async () => {
