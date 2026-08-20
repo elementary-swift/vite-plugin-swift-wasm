@@ -52,6 +52,21 @@ const wasmInstance = await init();
 // import { init } from "virtual:swift-wasm?js";
 ```
 
+For runtimes that accept a precompiled `WebAssembly.Module`, such as worker
+environments, add the `&module` flag:
+
+```ts
+import { init } from "virtual:swift-wasm?js&module&product=Worker";
+
+const wasmInstance = await init();
+```
+
+This imports the built WebAssembly file as `Worker.wasm?module` and passes it as
+`options.module` to the `js` generated initializer. The flag depends only on
+the bundler's `?module` support and does not detect a specific runtime.
+
+The `module` flag is supported only by `?js`; `?init&module` is invalid.
+
 ### Manual WebAssembly initialization
 
 The `?init` mode runs a plain `swift build` and re-exports Vite's
@@ -77,6 +92,9 @@ All options with their default values:
 swiftWasm({
   // Path to the Swift package
   packagePath: ".",
+
+  // SwiftPM scratch directory, relative to the package path
+  scratchPath: ".build",
 
   // Additional arguments passed to the Swift build command
   // In ?js mode, these are passed to `swift package` after --swift-sdk.

@@ -1,6 +1,7 @@
 export type BuildOptions = {
   swiftSDK: string;
   packagePath: string;
+  scratchPath: string;
   product: string;
   configuration: string;
   toolsetArgs: string[];

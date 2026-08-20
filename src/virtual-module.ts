@@ -2,10 +2,13 @@ export const VIRTUAL_MODULE_ID = "virtual:swift-wasm";
 export const RESOLVED_VIRTUAL_MODULE_ID = `\0${VIRTUAL_MODULE_ID}`;
 
 export type BuildMode = "init" | "js";
+const BUILD_MODES: readonly BuildMode[] = ["init", "js"];
+const QUERY_PARAMETERS = new Set([...BUILD_MODES, "module", "product"]);
 
 export type VirtualModuleRequest = {
   mode: BuildMode;
   product?: string;
+  module?: boolean;
 };
 
 export function resolveSwiftWasmVirtualModule(id: string): string | null {
@@ -51,16 +54,26 @@ function parseVirtualModuleRequest(id: string): VirtualModuleRequest {
   const params = new URLSearchParams(
     query.startsWith("?") ? query.slice(1) : "",
   );
-  const allowedParams = new Set(["init", "js", "product"]);
-
   for (const [key] of params) {
-    if (!allowedParams.has(key)) {
+    if (!QUERY_PARAMETERS.has(key)) {
       throw new Error(`Unknown query parameter: ${key}`);
     }
   }
 
-  const modes = (["init", "js"] as const).flatMap((mode) =>
-    params.getAll(mode).map(() => mode),
+  const mode = parseBuildMode(params);
+  const product = parseOptionalValue(params, "product");
+  const importModule = parseOptionalFlag(params, "module");
+
+  return {
+    mode,
+    ...(product !== undefined ? { product } : {}),
+    ...(importModule ? { module: true } : {}),
+  };
+}
+
+function parseBuildMode(params: URLSearchParams): BuildMode {
+  const modes = BUILD_MODES.flatMap((mode) =>
+    params.getAll(mode).map((value) => ({ mode, value })),
   );
 
   if (modes.length === 0) {
@@ -75,26 +88,45 @@ function parseVirtualModuleRequest(id: string): VirtualModuleRequest {
     );
   }
 
-  for (const mode of ["init", "js"] as const) {
-    for (const value of params.getAll(mode)) {
-      if (value !== "") {
-        throw new Error(`The "${mode}" query parameter does not take a value.`);
-      }
-    }
+  const [{ mode, value }] = modes;
+  if (value !== "") {
+    throw new Error(`The "${mode}" query parameter does not take a value.`);
   }
 
-  const products = params.getAll("product");
-  if (products.length > 1) {
+  return mode;
+}
+
+function parseOptionalFlag(params: URLSearchParams, name: string): boolean {
+  const value = parseOptionalParameter(params, name);
+  if (value !== undefined && value !== "") {
+    throw new Error(`The "${name}" query parameter does not take a value.`);
+  }
+
+  return value !== undefined;
+}
+
+function parseOptionalValue(
+  params: URLSearchParams,
+  name: string,
+): string | undefined {
+  const value = parseOptionalParameter(params, name);
+  if (value === "") {
+    throw new Error(`The "${name}" query parameter must not be empty.`);
+  }
+
+  return value;
+}
+
+function parseOptionalParameter(
+  params: URLSearchParams,
+  name: string,
+): string | undefined {
+  const values = params.getAll(name);
+  if (values.length > 1) {
     throw new Error(
-      `The "product" query parameter may only be specified once.`,
+      `The "${name}" query parameter may only be specified once.`,
     );
   }
-  if (products[0] === "") {
-    throw new Error(`The "product" query parameter must not be empty.`);
-  }
 
-  return {
-    mode: modes[0],
-    product: products[0],
-  };
+  return values[0];
 }

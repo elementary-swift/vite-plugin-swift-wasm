@@ -7,6 +7,7 @@ import {
   type BuildOutput,
 } from "./build-modes/index.ts";
 import { CommandRunner, quoteArgsForDisplay } from "./command.ts";
+import { DEFAULT_PACKAGE_PATH, DEFAULT_SCRATCH_PATH } from "./defaults.ts";
 import { moduleImportSpecifier } from "./paths.ts";
 import { createReloadDebouncer, createThrottledRebuilder } from "./rebuild.ts";
 import { getToolsetBuildArgs, SwiftToolchain } from "./swift.ts";
@@ -26,6 +27,13 @@ type SwiftWasmPluginOptions = {
    * @default "."
    */
   packagePath?: string;
+
+  /**
+   * The SwiftPM scratch directory, relative to the package path.
+   * @default ".build"
+   */
+  scratchPath?: string;
+
   /**
    * Additional arguments to pass to the Swift compiler.
    * @default []
@@ -72,7 +80,7 @@ type SwiftWasmPluginOptions = {
 export default function swiftWasm(
   options: SwiftWasmPluginOptions = {},
 ): Plugin {
-  const packagePath = options.packagePath ?? ".";
+  const packagePath = options.packagePath ?? DEFAULT_PACKAGE_PATH;
   const runner = new CommandRunner();
   const swift = new SwiftToolchain(
     runner,
@@ -142,7 +150,7 @@ export default function swiftWasm(
 
       const product = await resolveProduct(request);
       const builder = createBuildModeBuilder(
-        request.mode,
+        request,
         await resolveBuildOptions(product),
         swift,
       );
@@ -230,6 +238,7 @@ export default function swiftWasm(
     return {
       swiftSDK: await swift.resolveSDKID(useEmbeddedSwift),
       packagePath,
+      scratchPath: options.scratchPath ?? DEFAULT_SCRATCH_PATH,
       product,
       configuration: isDev ? "debug" : "release",
       toolsetArgs: getToolsetBuildArgs(

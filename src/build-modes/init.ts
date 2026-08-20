@@ -1,5 +1,6 @@
 import path from "node:path";
 import { moduleImportSpecifier } from "../paths.ts";
+import { getSwiftPMPathArgs } from "../swift.ts";
 import type {
   BuildModeBuilder,
   BuildOptions,
@@ -43,8 +44,7 @@ export function createInitBuilder(
 
 export function getInitBuildArgs(options: BuildOptions): string[] {
   return [
-    "--package-path",
-    options.packagePath,
+    ...getSwiftPMPathArgs(options.packagePath, options.scratchPath),
     "--swift-sdk",
     options.swiftSDK,
     "--configuration",

@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import colors from "picocolors";
 import type { CommandRunner } from "./command.ts";
+import { DEFAULT_PACKAGE_PATH, DEFAULT_SCRATCH_PATH } from "./defaults.ts";
 
 type SwiftLogger = {
   warn(message: string): void;
@@ -54,8 +55,7 @@ export class SwiftToolchain {
     const output = await this.runner.capture(this.command, [
       "package",
       "show-executables",
-      "--package-path",
-      packagePath,
+      ...getPackagePathArgs(packagePath),
       "--format",
       "json",
     ]);
@@ -80,8 +80,7 @@ export class SwiftToolchain {
   async hasPlugin(packagePath: string, pluginName: string): Promise<boolean> {
     const plugins = await this.runner.capture(this.command, [
       "package",
-      "--package-path",
-      packagePath,
+      ...getPackagePathArgs(packagePath),
       "plugin",
       "--list",
     ]);
@@ -100,6 +99,23 @@ export class SwiftToolchain {
       ),
     );
   }
+}
+
+function getPackagePathArgs(packagePath: string): string[] {
+  return packagePath === DEFAULT_PACKAGE_PATH
+    ? []
+    : ["--package-path", packagePath];
+}
+
+export function getSwiftPMPathArgs(
+  packagePath: string,
+  scratchPath: string,
+): string[] {
+  const args = getPackagePathArgs(packagePath);
+  if (scratchPath !== DEFAULT_SCRATCH_PATH) {
+    args.push("--scratch-path", scratchPath);
+  }
+  return args;
 }
 
 function pluginListIncludes(pluginList: string, pluginName: string): boolean {

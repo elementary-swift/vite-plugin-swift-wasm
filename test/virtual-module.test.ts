@@ -28,6 +28,16 @@ test("parses resolved init and js requests", () => {
     ),
     { mode: "js", product: "My App" },
   );
+  assert.deepEqual(
+    parseResolvedSwiftWasmVirtualModule(
+      "\0virtual:swift-wasm?js&module&product=Worker",
+    ),
+    { mode: "js", product: "Worker", module: true },
+  );
+  assert.deepEqual(
+    parseResolvedSwiftWasmVirtualModule("\0virtual:swift-wasm?init&module"),
+    { mode: "init", module: true },
+  );
   assert.equal(
     parseResolvedSwiftWasmVirtualModule("virtual:swift-wasm?init"),
     null,
@@ -69,6 +79,20 @@ test("rejects invalid query parameters", () => {
     () =>
       parseResolvedSwiftWasmVirtualModule("\0virtual:swift-wasm?init&product="),
     /must not be empty/,
+  );
+  assert.throws(
+    () =>
+      parseResolvedSwiftWasmVirtualModule(
+        "\0virtual:swift-wasm?js&module=enabled",
+      ),
+    /"module" query parameter does not take a value/,
+  );
+  assert.throws(
+    () =>
+      parseResolvedSwiftWasmVirtualModule(
+        "\0virtual:swift-wasm?js&module&module",
+      ),
+    /"module" query parameter may only be specified once/,
   );
 });
 
