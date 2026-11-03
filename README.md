@@ -10,6 +10,7 @@ A Vite plugin for Swift WebAssembly integration.
 - automatically detects matching Swift SDK for WebAssembly and builds a reactor module
 - watches changes of \*.swift files and triggers instant rebuild and reload
 - for release builds: optimizes binary using wasm-opt (must be installed separately)
+- for release builds: adds `<link rel="preload">` for the WebAssembly module to HTML pages that load it
 - supports [Embedded Swift](https://docs.swift.org/embedded/documentation/embedded/) build mode (via `wasm-embedded` Swift SDK)
 - automatically links [swiftUnicodeDataTables](https://docs.swift.org/embedded/documentation/embedded/strings/) when using Embedded Swift
 
@@ -114,6 +115,10 @@ swiftWasm({
 
   // Arguments to pass to wasm-opt
   wasmOptArgs: ["-Os", "--strip-debug"],
+
+  // Add <link rel="preload"> for the WebAssembly module to HTML pages that
+  // statically import it (production builds only)
+  preloadWasm: true,
 });
 ```
 
