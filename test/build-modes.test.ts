@@ -261,3 +261,21 @@ test("creates portable Vite import specifiers", () => {
     "./.build/index.js",
   );
 });
+
+test("js strategy passes js plugin options after its own arguments", () => {
+  const args = getJSBuildArgs(
+    {
+      ...buildOptions,
+      js: { wasiRuntime: "uwasi", extraArgs: ["--debug-info-format", "dwarf"] },
+    },
+    "/tmp/package-to-js",
+  );
+
+  assert.deepEqual(args.slice(args.indexOf("--no-optimize")), [
+    "--no-optimize",
+    "--wasi-runtime",
+    "uwasi",
+    "--debug-info-format",
+    "dwarf",
+  ]);
+});

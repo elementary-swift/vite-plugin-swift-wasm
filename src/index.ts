@@ -5,6 +5,7 @@ import {
   createBuildModeBuilder,
   type BuildOptions,
   type BuildOutput,
+  type JSBuildOptions,
 } from "./build-modes/index.ts";
 import { CommandRunner, quoteArgsForDisplay } from "./command.ts";
 import { DEFAULT_PACKAGE_PATH, DEFAULT_SCRATCH_PATH } from "./defaults.ts";
@@ -45,6 +46,11 @@ type SwiftWasmPluginOptions = {
    * @default []
    */
   extraBuildArgs?: string[];
+
+  /**
+   * Options for the `swift package js` plugin (`?js` mode only).
+   */
+  js?: JSBuildOptions;
 
   /**
    * Whether to use Embedded Swift variant of the WebAssembly Swift SDK (in production builds only).
@@ -302,6 +308,7 @@ export default function swiftWasm(
         options.linkEmbeddedUnicodeDataTables ?? true,
       ),
       extraBuildArgs: options.extraBuildArgs ?? [],
+      js: options.js,
     };
   }
 

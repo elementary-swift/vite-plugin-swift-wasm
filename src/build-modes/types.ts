@@ -6,6 +6,22 @@ export type BuildOptions = {
   configuration: string;
   toolsetArgs: string[];
   extraBuildArgs: string[];
+  js?: JSBuildOptions;
+};
+
+export type JSBuildOptions = {
+  /**
+   * The WASI runtime used by the generated JavaScript (passed as `--wasi-runtime`, requires JavaScriptKit 0.59 or later).
+   * The matching npm package (`@bjorn3/browser_wasi_shim` or `uwasi`) must be installed.
+   * @default JavaScriptKit's default ("browser-wasi-shim")
+   */
+  wasiRuntime?: "browser-wasi-shim" | "uwasi";
+
+  /**
+   * Additional arguments to pass to the `swift package js` plugin.
+   * @default []
+   */
+  extraArgs?: string[];
 };
 
 export type BuildOutput = {
