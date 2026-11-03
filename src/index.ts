@@ -9,6 +9,11 @@ import {
 import { CommandRunner, quoteArgsForDisplay } from "./command.ts";
 import { DEFAULT_PACKAGE_PATH, DEFAULT_SCRATCH_PATH } from "./defaults.ts";
 import { moduleImportSpecifier } from "./paths.ts";
+import {
+  collectPreloadedWasmFiles,
+  outputFileHref,
+  wasmPreloadTag,
+} from "./preload.ts";
 import { createReloadDebouncer, createThrottledRebuilder } from "./rebuild.ts";
 import { getToolsetBuildArgs, SwiftToolchain } from "./swift.ts";
 import {
@@ -76,6 +81,17 @@ type SwiftWasmPluginOptions = {
    * @default ["-Os", "--strip-debug"]
    */
   wasmOptArgs?: string[];
+
+  /**
+   * Whether to add a `<link rel="preload">` for the built WebAssembly module to HTML pages
+   * that statically import it (in production builds only).
+   * This lets the browser download the module in parallel with the JavaScript entry.
+   *
+   * Disable this if you load the module from a different URL (e.g. by passing a custom `module` to `init`).
+   *
+   * @default true
+   */
+  preloadWasm?: boolean;
 };
 
 export default function swiftWasm(
@@ -99,6 +115,9 @@ export default function swiftWasm(
   let useWasmOpt = options.useWasmOpt ?? true;
   let useEmbeddedSwift = options.useEmbeddedSDK ?? false;
   let isDev = false;
+  let root = process.cwd();
+  let base = "/";
+  const builtWasmModules = new Set<string>();
 
   // Only one imported Swift module is supported for now.
   let watchedSourcesFolders: string[] = [];
@@ -144,6 +163,11 @@ export default function swiftWasm(
       };
     },
 
+    configResolved(config) {
+      root = config.root;
+      base = config.base;
+    },
+
     resolveId(id) {
       return resolveSwiftWasmVirtualModule(id);
     },
@@ -180,6 +204,7 @@ export default function swiftWasm(
       };
 
       const output = await build();
+      builtWasmModules.add(path.resolve(output.wasmModule));
       logger.info(
         `Done: ${colors.green(moduleImportSpecifier(output.entryModule))}`,
       );
@@ -196,6 +221,29 @@ export default function swiftWasm(
       }
 
       return builder.moduleSource(output);
+    },
+
+    transformIndexHtml: {
+      order: "post",
+      handler(_, context) {
+        if (
+          isDev ||
+          options.preloadWasm === false ||
+          !context.bundle ||
+          !context.chunk
+        ) {
+          return;
+        }
+
+        return collectPreloadedWasmFiles(
+          context.chunk,
+          context.bundle,
+          (originalFileName) =>
+            builtWasmModules.has(path.resolve(root, originalFileName)),
+        ).map((fileName) =>
+          wasmPreloadTag(outputFileHref(fileName, context.path, base)),
+        );
+      },
     },
 
     hotUpdate(context) {
