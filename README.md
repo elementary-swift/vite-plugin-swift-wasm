@@ -101,6 +101,16 @@ swiftWasm({
   // In ?js mode, these are passed to `swift package` after --swift-sdk.
   extraBuildArgs: [],
 
+  // Options for the `swift package js` plugin (?js mode only)
+  js: {
+    // WASI runtime of the generated JavaScript: "browser-wasi-shim" or "uwasi"
+    // (requires JavaScriptKit 0.59+ and the matching npm package; omitted uses JavaScriptKit's default)
+    wasiRuntime: undefined,
+
+    // Additional arguments passed to `swift package js`
+    extraArgs: [],
+  },
+
   // Use Embedded Swift variant (production builds only)
   // Produces smaller binaries with reduced runtime overhead
   useEmbeddedSDK: false,

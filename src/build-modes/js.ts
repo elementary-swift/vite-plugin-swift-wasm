@@ -77,6 +77,10 @@ export function getJSBuildArgs(
     "--output",
     outputDirectory,
     "--no-optimize",
+    ...(options.js?.wasiRuntime
+      ? ["--wasi-runtime", options.js.wasiRuntime]
+      : []),
+    ...(options.js?.extraArgs ?? []),
   ];
 }
 

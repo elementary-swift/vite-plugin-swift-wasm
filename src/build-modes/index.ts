@@ -11,6 +11,7 @@ export type {
   BuildModeBuilder,
   BuildOptions,
   BuildOutput,
+  JSBuildOptions,
   SwiftBuildCommands,
 } from "./types.ts";
 
